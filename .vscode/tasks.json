@@ -1,0 +1,41 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Analyze (PSScriptAnalyzer)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "build.ps1", "-Task", "Analyze"],
+            "group": "test",
+            "presentation": { "reveal": "always", "panel": "new" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Tests (Pester)",
+            "type": "shell",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "build.ps1", "-Task", "Test"],
+            "group": "test",
+            "presentation": { "reveal": "always", "panel": "new" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build & Validate",
+            "type": "shell",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "build.ps1", "-Task", "Build"],
+            "group": "build",
+            "presentation": { "reveal": "always", "panel": "new" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Analyze + Test + Build",
+            "type": "shell",
+            "command": "pwsh",
+            "args": ["-NoProfile", "-File", "build.ps1", "-Task", "All"],
+            "group": { "kind": "build", "isDefault": true },
+            "presentation": { "reveal": "always", "panel": "new" },
+            "problemMatcher": []
+        }
+    ]
+}

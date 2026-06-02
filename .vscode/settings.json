@@ -1,0 +1,13 @@
+{
+    "powershell.scriptAnalysis.settingsPath": ".\\PSScriptAnalyzerSettings.psd1",
+    "powershell.codeFormatting.openBraceOnSameLine": true,
+    "powershell.codeFormatting.newLineAfterCloseBrace": true,
+    "powershell.codeFormatting.whitespaceBeforeOpenBrace": true,
+    "powershell.codeFormatting.whitespaceBeforeOpenParen": true,
+    "powershell.codeFormatting.whitespaceAroundOperator": true,
+    "powershell.codeFormatting.whitespaceAfterSeparator": true,
+    "powershell.codeFormatting.ignoreOneLineBlock": false,
+    "powershell.codeFormatting.alignPropertyValuePairs": true,
+    "files.encoding": "utf8",
+    "files.eol": "\n"
+}
