@@ -5,6 +5,9 @@ function Get-VoiceAutoAttendantData {
         and structured call flow data suitable for visualization.
     .PARAMETER NameCache
         A reference to a hashtable used for caching resolved target display names.
+    .PARAMETER ResourceAccountMap
+        Optional reverse map of configuration id -> @(resource account ids) from
+        Get-VoiceResourceAccountMap. Built automatically if not supplied.
     .EXAMPLE
         $cache = @{}
         Get-VoiceAutoAttendantData -NameCache ([ref]$cache)
@@ -12,8 +15,17 @@ function Get-VoiceAutoAttendantData {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [ref]$NameCache
+        [ref]$NameCache,
+
+        [Parameter()]
+        [hashtable]$ResourceAccountMap
     )
+
+    $raMap = if ($PSBoundParameters.ContainsKey('ResourceAccountMap') -and $ResourceAccountMap) {
+        $ResourceAccountMap
+    } else {
+        Get-VoiceResourceAccountMap
+    }
 
     try {
         $aas = Get-CsAutoAttendant -ErrorAction Stop
@@ -23,6 +35,7 @@ function Get-VoiceAutoAttendantData {
 
     $result = @($aas | ForEach-Object {
         $aa = $_
+        try {
 
         # Resolve operator
         $operatorName = $null
@@ -86,16 +99,10 @@ function Get-VoiceAutoAttendantData {
             }
         })
 
-        # ── Resource accounts ──
+        # ── Resource accounts (object ids of the RAs that front this AA) ──
+        $raKey = ([string]$aa.Identity).ToLowerInvariant()
         $associatedRAs = @()
-        try {
-            $assoc = Get-CsOnlineApplicationInstanceAssociation -Identity $aa.Identity -ErrorAction SilentlyContinue
-            if ($assoc) {
-                $associatedRAs = @($assoc | ForEach-Object { $_.ApplicationInstance })
-            }
-        } catch {
-            Write-Verbose "AutoAttendantData/Association ($($aa.Identity)): $_"
-        }
+        if ($raMap.ContainsKey($raKey)) { $associatedRAs = @($raMap[$raKey]) }
 
         @{
             id                         = [string]$aa.Identity
@@ -114,6 +121,9 @@ function Get-VoiceAutoAttendantData {
             inclusionScopeGroupIds     = @(if ($aa.InclusionScope) { $aa.InclusionScope.GroupIds | ForEach-Object { [string]$_ } } else { @() })
             exclusionScopeGroupIds     = @(if ($aa.ExclusionScope) { $aa.ExclusionScope.GroupIds | ForEach-Object { [string]$_ } } else { @() })
             associatedResourceAccounts = $associatedRAs
+        }
+        } catch {
+            Write-Warning "Skipped Auto Attendant '$($aa.Name)': $($_.Exception.Message)"
         }
     })
 

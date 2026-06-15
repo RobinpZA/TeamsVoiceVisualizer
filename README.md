@@ -31,9 +31,13 @@ No server, no database, no external runtime — just PowerShell, the MicrosoftTe
 |------|-------------|
 | **Auto Attendants** | Full call flow visualization: greeting → menu → DTMF options → targets (User, Resource Account, External PSTN, Operator, Disconnect, Announcement). Business hours, after-hours with schedule, and holiday flows. |
 | **Call Queues** | Complete flow: greeting → music-on-hold → routing method → agent group (individuals, DLs, Teams channel) → overflow/timeout/no-agents exception paths. Conference mode, presence-based routing, OBO caller ID. |
-| **Interactivity** | Zoom, pan, drag nodes. Hover tooltips show node details. Collapsible sections. Sticky navigation with smooth scroll. |
+| **Layout** | Each flow is laid out as a **layered directed graph** (dagre), so a target referenced from two places stays a single node and back-edges (e.g. AA → Queue → same AA) are preserved rather than cut. |
+| **Interactivity** | Zoom & pan with a per-diagram **Reset view** button. **Drag any node** to reposition it; connected edges follow. Hover tooltips show node details (full greeting text, per-DTMF menu map, agent lists, AA settings). Collapsible sections. Sticky navigation with smooth scroll. |
+| **Image export** | Export any diagram as **PNG** (2× raster) or **SVG** (vector) from the per-diagram toolbar — for tickets, runbooks, or documentation. |
+| **Cross-flow linking** | Transfer targets that point to a resource account fronting another AA or Call Queue become **clickable jumps** — click to scroll to and highlight the destination diagram, so you can follow the end-to-end caller journey. |
+| **Global search** | Search box filters and highlights nodes across every diagram (by user, queue, phone number, or greeting text), auto-expanding and jumping to the first match. |
 | **Dark Theme** | GitHub-dark inspired color scheme. Color-coded node types for instant recognition. |
-| **Self-Contained** | Single HTML file with D3.js loaded from CDN. No build step, no dependencies beyond a browser. |
+| **Self-Contained** | Single HTML file with D3.js and dagre loaded from CDN. No build step, no dependencies beyond a browser. |
 
 ---
 

@@ -5,6 +5,9 @@ function Get-VoiceCallQueueData {
         and structured data suitable for visualization.
     .PARAMETER NameCache
         A reference to a hashtable used for caching resolved target display names.
+    .PARAMETER ResourceAccountMap
+        Optional reverse map of configuration id -> @(resource account ids) from
+        Get-VoiceResourceAccountMap. Built automatically if not supplied.
     .EXAMPLE
         $cache = @{}
         Get-VoiceCallQueueData -NameCache ([ref]$cache)
@@ -12,8 +15,17 @@ function Get-VoiceCallQueueData {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [ref]$NameCache
+        [ref]$NameCache,
+
+        [Parameter()]
+        [hashtable]$ResourceAccountMap
     )
+
+    $raMap = if ($PSBoundParameters.ContainsKey('ResourceAccountMap') -and $ResourceAccountMap) {
+        $ResourceAccountMap
+    } else {
+        Get-VoiceResourceAccountMap
+    }
 
     try {
         $cqs = Get-CsCallQueue -ErrorAction Stop
@@ -23,6 +35,7 @@ function Get-VoiceCallQueueData {
 
     $result = @($cqs | ForEach-Object {
         $cq = $_
+        try {
 
         # Resolve target names
         $resolveTarget = {
@@ -64,16 +77,10 @@ function Get-VoiceCallQueueData {
             Resolve-VoiceTargetName -Id $_ -Type 'ApplicationEndpoint' -NameCache $NameCache
         })
 
-        # Associated resource accounts
+        # Associated resource accounts (object ids of the RAs that front this CQ)
+        $raKey = ([string]$cq.Identity).ToLowerInvariant()
         $associatedRAs = @()
-        try {
-            $assoc = Get-CsOnlineApplicationInstanceAssociation -Identity $cq.Identity -ErrorAction SilentlyContinue
-            if ($assoc) {
-                $associatedRAs = @($assoc | Where-Object { $_ } | ForEach-Object { [string]$_.ObjectId })
-            }
-        } catch {
-            Write-Verbose "CallQueueData/Association ($($cq.Identity)): $_"
-        }
+        if ($raMap.ContainsKey($raKey)) { $associatedRAs = @($raMap[$raKey]) }
 
         @{
             id                           = [string]$cq.Identity
@@ -112,6 +119,9 @@ function Get-VoiceCallQueueData {
             noAgentActionTargetName      = $noAgentTargetName
             serviceLevelThresholdSeconds = $cq.ServiceLevelThresholdResponseTimeInSecond
             associatedResourceAccounts   = $associatedRAs
+        }
+        } catch {
+            Write-Warning "Skipped Call Queue '$($cq.Name)': $($_.Exception.Message)"
         }
     })
 

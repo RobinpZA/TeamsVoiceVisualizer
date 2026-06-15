@@ -21,15 +21,17 @@ function New-CQGraphData {
         $counter = @{ n = 0 }
 
         function New-Node {
-        param([string]$Label, [string]$Type, [string]$SubLabel, $Detail)
+        param([string]$Label, [string]$Type, [string]$SubLabel, $Detail, [string]$TargetRef, [string]$LinkKind)
         $id = "cq_$($CQ.id)_$($counter.n)"
         $counter.n++
         $node = [PSCustomObject]@{
-            id       = $id
-            label    = $Label
-            type     = $Type
-            subLabel = $SubLabel
-            detail   = $Detail
+            id        = $id
+            label     = $Label
+            type      = $Type
+            subLabel  = $SubLabel
+            detail    = $Detail
+            targetRef = $TargetRef
+            linkKind  = $LinkKind
         }
         $nodes.Add($node)
         return $id
@@ -137,7 +139,8 @@ function New-CQGraphData {
 
         Add-ExceptionTarget -SourceNodeId $ovfNode -Action $overflowAction `
             -TargetType $CQ.overflowActionTargetType `
-            -TargetName $CQ.overflowActionTargetName
+            -TargetName $CQ.overflowActionTargetName `
+            -TargetId $CQ.overflowActionTargetId
     }
 
     $timeoutAction = $CQ.timeoutAction
@@ -148,7 +151,8 @@ function New-CQGraphData {
 
         Add-ExceptionTarget -SourceNodeId $toNode -Action $timeoutAction `
             -TargetType $CQ.timeoutActionTargetType `
-            -TargetName $CQ.timeoutActionTargetName
+            -TargetName $CQ.timeoutActionTargetName `
+            -TargetId $CQ.timeoutActionTargetId
     }
 
     $noAgentAction = $CQ.noAgentAction
@@ -158,7 +162,8 @@ function New-CQGraphData {
 
         Add-ExceptionTarget -SourceNodeId $naNode -Action $noAgentAction `
             -TargetType $CQ.noAgentActionTargetType `
-            -TargetName $CQ.noAgentActionTargetName
+            -TargetName $CQ.noAgentActionTargetName `
+            -TargetId $CQ.noAgentActionTargetId
     }
 
     # Features summary
@@ -187,8 +192,15 @@ function Add-ExceptionTarget {
         [string]$SourceNodeId,
         [string]$Action,
         [string]$TargetType,
-        [string]$TargetName
+        [string]$TargetName,
+        [string]$TargetId
     )
+
+    $linkKind = switch ($TargetType) {
+        'ApplicationEndpoint'         { 'ra' }
+        'OrganizationalAutoAttendant' { 'aa' }
+        default                       { $null }
+    }
 
     $actionLabels = @{
         'Forward'            = 'Forward'
@@ -212,7 +224,10 @@ function Add-ExceptionTarget {
                 'ExternalPstn'           { 'external' }
                 default                  { 'unknown' }
             }
-            subLabel = $actionName
+            subLabel  = $actionName
+            detail    = $null
+            targetRef = $TargetId
+            linkKind  = $linkKind
         }
         $nodes.Add($targetNode)
         $links.Add([PSCustomObject]@{

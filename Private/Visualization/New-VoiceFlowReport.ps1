@@ -34,9 +34,12 @@ function New-VoiceFlowReport {
     $aaCount = $AutoAttendantGraphs.Count
     $cqCount = $CallQueueGraphs.Count
 
-    # Serialize graph data to JSON for embedding
-    $aaJson = $AutoAttendantGraphs | ConvertTo-Json -Depth 10 -Compress
-    $cqJson = $CallQueueGraphs | ConvertTo-Json -Depth 10 -Compress
+    # Serialize graph data to JSON for embedding.
+    # NOTE: piping a single object to ConvertTo-Json emits a JSON *object* (not an
+    # array), and an empty collection emits nothing — both break the JS that expects
+    # an array. Use -InputObject with an @() wrap so we always get a JSON array.
+    $aaJson = if ($aaCount -gt 0) { ConvertTo-Json -InputObject @($AutoAttendantGraphs) -Depth 10 -Compress } else { '[]' }
+    $cqJson = if ($cqCount -gt 0) { ConvertTo-Json -InputObject @($CallQueueGraphs) -Depth 10 -Compress } else { '[]' }
 
     $html = @"
 <!DOCTYPE html>
@@ -188,6 +191,8 @@ function New-VoiceFlowReport {
         .diagram-card.collapsed .card-body { display: none; }
 
         /* SVG node styles */
+        .node { cursor: grab; }
+        .node:active { cursor: grabbing; }
         .node circle { stroke-width: 2px; transition: stroke-width 0.15s, filter 0.15s; }
         .node text { font-size: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; fill: var(--text); pointer-events: none; }
         .node .sub-label { font-size: 9px; fill: var(--text-muted); }
@@ -249,6 +254,41 @@ function New-VoiceFlowReport {
         }
         .legend-item { display: flex; align-items: center; gap: 6px; }
         .legend-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid; }
+
+        /* Search */
+        .search-row { margin-top: 14px; display: flex; align-items: center; gap: 10px; }
+        .search-input {
+            flex: 1; max-width: 380px;
+            background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+            padding: 7px 12px; color: var(--text); font-size: 0.85rem;
+        }
+        .search-input:focus { outline: none; border-color: var(--accent); }
+        .search-count { font-size: 0.78rem; color: var(--text-muted); }
+
+        /* Per-diagram toolbar */
+        .diagram-toolbar { position: absolute; top: 10px; right: 12px; z-index: 5; display: flex; gap: 6px; }
+        .tool-btn {
+            background: var(--bg-hover); border: 1px solid var(--border); color: var(--text-muted);
+            border-radius: 6px; padding: 4px 10px; font-size: 0.74rem; cursor: pointer; transition: all 0.15s;
+        }
+        .tool-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* Cross-flow jump nodes */
+        .node.has-jump { cursor: pointer; }
+        .node.has-jump circle { stroke-dasharray: 4,2; }
+        .node.has-jump text { text-decoration: underline; text-decoration-style: dotted; }
+
+        /* Search highlight / dim */
+        .node.search-dim { opacity: 0.12; }
+        .node.search-match circle { stroke-width: 3.5px; filter: drop-shadow(0 0 5px var(--accent)); }
+        .diagram-card.search-hidden { display: none; }
+
+        /* Jump-target flash */
+        .diagram-card.flash { animation: flash-pulse 1.3s ease; }
+        @keyframes flash-pulse {
+            0%, 100% { border-color: var(--border); box-shadow: none; }
+            25% { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(88,166,255,0.35); }
+        }
     </style>
 </head>
 <body>
@@ -260,18 +300,125 @@ function New-VoiceFlowReport {
         <div class="stat"><span class="dot dot-cq"></span> $cqCount Call Queue$(if ($cqCount -ne 1) { 's' })</div>
     </div>
     <div class="nav" id="nav"></div>
+    <div class="search-row">
+        <input type="search" id="search" class="search-input" placeholder="Search nodes (user, queue, number, greeting text)&hellip;" autocomplete="off">
+        <span class="search-count" id="search-count"></span>
+    </div>
 </div>
 <div class="container" id="container"></div>
 
 <!-- D3.js v7 -->
 <script src="https://d3js.org/d3.v7.min.js"></script>
+<!-- dagre: layered directed-graph layout (preserves shared nodes + back-edges) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
 <script>
 "use strict";
-const aaData = $aaJson;
-const cqData = $cqJson;
+// Normalize to arrays — guards against a single object or null sneaking through.
+function asArray(d) { return Array.isArray(d) ? d : (d != null ? [d] : []); }
+const aaData = asArray($aaJson);
+const cqData = asArray($cqJson);
 
 const container = d3.select('#container');
 const nav = d3.select('#nav');
+
+// ── HTML escape helper (greeting/TTS text is untrusted free text) ──
+function esc(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ── Diagram export (SVG / PNG) ──
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Clone an SVG into a standalone document: full extent (pan/zoom reset),
+// the page stylesheet inlined, and an opaque background.
+function serializeDiagram(svgNode) {
+    const vb = (svgNode.getAttribute('viewBox') || '0 0 800 600').split(' ').map(Number);
+    const clone = svgNode.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('width', vb[2]);
+    clone.setAttribute('height', vb[3]);
+    const mainG = clone.querySelector('g');
+    if (mainG) mainG.removeAttribute('transform');
+    const styleEl = document.createElement('style');
+    const srcStyle = document.querySelector('style');
+    styleEl.textContent = srcStyle ? srcStyle.textContent : '';
+    clone.insertBefore(styleEl, clone.firstChild);
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('x', vb[0]); bg.setAttribute('y', vb[1]);
+    bg.setAttribute('width', vb[2]); bg.setAttribute('height', vb[3]);
+    bg.setAttribute('fill', '#0d1117');
+    clone.insertBefore(bg, styleEl.nextSibling);
+    return { xml: new XMLSerializer().serializeToString(clone), w: vb[2], h: vb[3] };
+}
+
+function exportDiagram(svgNode, name, fmt) {
+    const out = serializeDiagram(svgNode);
+    if (fmt === 'svg') {
+        downloadBlob(new Blob([out.xml], { type: 'image/svg+xml;charset=utf-8' }), name + '.svg');
+        return;
+    }
+    const scale = 2; // 2x for crisp raster output
+    const src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(out.xml)));
+    const img = new Image();
+    img.onload = function() {
+        const canvas = document.createElement('canvas');
+        canvas.width = out.w * scale; canvas.height = out.h * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(b => { if (b) downloadBlob(b, name + '.png'); }, 'image/png');
+    };
+    img.onerror = function() { alert('PNG export failed (could not rasterize the diagram).'); };
+    img.src = src;
+}
+
+// ── Cross-flow resolution maps ──
+// Resource-account objectId -> the AA/CQ diagram it fronts, and AA-id -> diagram.
+// Keys are normalized (lower-cased) so GUID casing differences between the AA
+// menu target and the resource-account id never cause a jump to silently miss.
+const raMap = {};
+const aaIdMap = {};
+const normId = s => (s == null ? '' : String(s)).toLowerCase();
+aaData.forEach((aa, i) => {
+    const dest = { prefix: 'aa', index: i, name: aa.autoAttendantName || ('AA ' + (i + 1)) };
+    aaIdMap[normId(aa.autoAttendantId)] = dest;
+    (aa.resourceAccounts || []).forEach(ra => { if (ra) raMap[normId(ra)] = dest; });
+});
+cqData.forEach((cq, i) => {
+    const dest = { prefix: 'cq', index: i, name: cq.callQueueName || ('CQ ' + (i + 1)) };
+    (cq.resourceAccounts || []).forEach(ra => { if (ra) raMap[normId(ra)] = dest; });
+});
+
+function resolveJump(nd) {
+    if (!nd) return null;
+    if (nd.linkKind === 'ra') return raMap[normId(nd.targetRef)] || null;
+    if (nd.linkKind === 'aa') return aaIdMap[normId(nd.targetRef)] || null;
+    return null;
+}
+
+function jumpTo(dest) {
+    const sel = d3.select('#' + dest.prefix + '-' + dest.index);
+    const el = sel.node();
+    if (!el) return;
+    sel.classed('collapsed', false).classed('search-hidden', false);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    sel.classed('flash', false);
+    void el.offsetWidth; // force reflow so the animation can replay
+    sel.classed('flash', true);
+    setTimeout(() => sel.classed('flash', false), 1400);
+}
+
+// Registry of rendered node selections, for global search.
+const diagramRegistry = [];
 
 // ── Build navigation ──
 if (aaData.length > 0) {
@@ -299,14 +446,19 @@ function showTooltip(event, d) {
     const label = nd.label || nd.id || '';
     const sub = nd.subLabel || '';
     const type = nd.type || '';
-    let html = '<strong>' + label + '</strong><br>' +
-        '<span style="color:#8b949e">' + type + (sub ? ' &middot; ' + sub : '') + '</span>';
+    let html = '<strong>' + esc(label) + '</strong><br>' +
+        '<span style="color:#8b949e">' + esc(type) + (sub ? ' &middot; ' + esc(sub) : '') + '</span>';
     if (nd.detail && Array.isArray(nd.detail) && nd.detail.length > 0) {
         html += '<div style="margin-top:6px;max-height:160px;overflow-y:auto;border-top:1px solid #30363d;padding-top:5px">';
         nd.detail.forEach(function(item) {
-            html += '<div style="padding:1px 0;color:#e6edf3">' + item + '</div>';
+            html += '<div style="padding:1px 0;color:#e6edf3">' + esc(item) + '</div>';
         });
         html += '</div>';
+    }
+    const jump = resolveJump(nd);
+    if (jump) {
+        html += '<div style="margin-top:6px;border-top:1px solid #30363d;padding-top:5px;color:#58a6ff">' +
+            '&#x2197; Click to jump to ' + esc(jump.name) + '</div>';
     }
     tooltip.html(html)
         .classed('visible', true)
@@ -363,51 +515,74 @@ function renderDiagram(data, index, prefix, badgeClass, badgeText) {
         return;
     }
 
-    // ── Build tree from flat nodes/links ──
-    const nodeMap = {};
-    nodes.forEach(n => { nodeMap[n.id] = { id: n.id, label: n.label, type: n.type, subLabel: n.subLabel, detail: n.detail || null, _childIds: [] }; });
+    // ── Build link maps + identify root (flat directed graph; no tree flattening) ──
+    const nodeById = {};
+    nodes.forEach(n => { nodeById[n.id] = n; });
     const linkLabelMap = {}, linkStyleMap = {}, hasParent = new Set();
     links.forEach(l => {
         const src = (typeof l.source === 'object') ? l.source.id : l.source;
         const tgt = (typeof l.target === 'object') ? l.target.id : l.target;
         linkLabelMap[src + '->' + tgt] = l.label || '';
         linkStyleMap[src + '->' + tgt] = l.style || 'solid';
-        if (nodeMap[src]) nodeMap[src]._childIds.push(tgt);
         hasParent.add(tgt);
     });
     const rootId = ((nodes.find(n => n.type === 'autoattendant' || n.type === 'callqueue'))
                   || (nodes.find(n => !hasParent.has(n.id)))
                   || nodes[0]).id;
 
-    function toHierarchy(id, visited) {
-        if (visited.has(id) || !nodeMap[id]) return null;
-        visited.add(id);
-        const n = nodeMap[id];
-        const children = n._childIds.map(cid => toHierarchy(cid, new Set(visited))).filter(Boolean);
-        return { id: n.id, label: n.label, type: n.type, subLabel: n.subLabel, detail: n.detail || null,
-                 children: children.length ? children : undefined };
+    function nodeRadius(t) {
+        switch (t) {
+            case 'autoattendant': case 'callqueue': return 18;
+            case 'greeting': case 'menu': case 'agentgroup': return 14;
+            case 'conference_mode': case 'agent_alert': case 'presence_routing': return 6;
+            default: return 12;
+        }
     }
 
-    const hierData = toHierarchy(rootId, new Set());
-    if (!hierData) {
-        body.append('div').style('padding', '24px').style('color', '#8b949e').text('Could not build tree.');
-        return;
-    }
+    // ── Layered directed layout via dagre ──
+    // Unlike d3.tree(), a layered DAG layout keeps a target referenced from two
+    // places as a *single* node (with multiple incoming edges) and preserves
+    // back-edges (e.g. AA → CQ → same AA loops) instead of silently cutting them.
+    const dg = new dagre.graphlib.Graph({ multigraph: true });
+    dg.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 180, marginx: 20, marginy: 20 });
+    dg.setDefaultEdgeLabel(() => ({}));
 
-    const root = d3.hierarchy(hierData);
-    d3.tree().nodeSize([60, 220])(root);
-
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    root.each(d => {
-        if (d.x < minX) minX = d.x;  if (d.x > maxX) maxX = d.x;
-        if (d.y < minY) minY = d.y;  if (d.y > maxY) maxY = d.y;
+    nodes.forEach(n => {
+        const r = nodeRadius(n.type);
+        dg.setNode(n.id, { width: r * 2, height: r * 2, r: r });
     });
-    const pad = 100;
-    const vbX = minY - pad, vbY = minX - pad;
-    const vbW = (maxY - minY) + pad * 2, vbH = (maxX - minX) + pad * 2;
+    let edgeSeq = 0;
+    links.forEach(l => {
+        const src = (typeof l.source === 'object') ? l.source.id : l.source;
+        const tgt = (typeof l.target === 'object') ? l.target.id : l.target;
+        if (!nodeById[src] || !nodeById[tgt]) return;
+        dg.setEdge(src, tgt,
+            { style: linkStyleMap[src + '->' + tgt] || 'solid', label: linkLabelMap[src + '->' + tgt] || '' },
+            'e' + (edgeSeq++));
+    });
+
+    dagre.layout(dg);
+
+    // Mutable per-node render data so node drag can move them after layout.
+    const nodeData = nodes.filter(n => dg.hasNode(n.id)).map(n => {
+        const p = dg.node(n.id);
+        return { data: n, x: p.x, y: p.y, r: p.r };
+    });
+    const posById = {};
+    nodeData.forEach(d => { posById[d.data.id] = d; });
+    function centerOf(id) { const d = posById[id]; return d ? { x: d.x, y: d.y } : { x: 0, y: 0 }; }
+
+    const edgeData = dg.edges().map(e => {
+        const v = dg.edge(e);
+        return { source: e.v, target: e.w, style: v.style, label: v.label, points: v.points, _dragged: false };
+    });
+
+    const pad = 40;
+    const vbW = (dg.graph().width || 200) + pad * 2;
+    const vbH = (dg.graph().height || 200) + pad * 2;
 
     const svg = body.append('svg')
-        .attr('viewBox', vbX + ' ' + vbY + ' ' + vbW + ' ' + vbH)
+        .attr('viewBox', (-pad) + ' ' + (-pad) + ' ' + vbW + ' ' + vbH)
         .attr('preserveAspectRatio', 'xMidYMid meet')
         .style('height', Math.max(350, Math.min(vbH, 650)) + 'px');
 
@@ -422,69 +597,118 @@ function renderDiagram(data, index, prefix, badgeClass, badgeText) {
     });
 
     const g = svg.append('g');
-    svg.call(d3.zoom().scaleExtent([0.2, 4]).on('zoom', ev => { g.attr('transform', ev.transform); }));
+    const zoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', ev => { g.attr('transform', ev.transform); });
+    svg.call(zoom);
 
-    const linkHoriz = d3.linkHorizontal().x(d => d.y).y(d => d.x);
+    // Toolbar: reset view + image export
+    const toolbar = body.append('div').attr('class', 'diagram-toolbar');
+    toolbar.append('button').attr('class', 'tool-btn').attr('type', 'button')
+        .text('Reset view')
+        .on('click', () => svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity));
+    const fileBase = (data.autoAttendantName || data.callQueueName || 'diagram').replace(/[^\w.-]+/g, '_');
+    toolbar.append('button').attr('class', 'tool-btn').attr('type', 'button')
+        .text('PNG').on('click', () => exportDiagram(svg.node(), fileBase, 'png'));
+    toolbar.append('button').attr('class', 'tool-btn').attr('type', 'button')
+        .text('SVG').on('click', () => exportDiagram(svg.node(), fileBase, 'svg'));
 
-    g.append('g').selectAll('path')
-        .data(root.links())
-        .join('path')
-        .attr('class', d => 'link ' + (linkStyleMap[d.source.data.id + '->' + d.target.data.id] || 'solid'))
-        .attr('marker-end', d => {
-            const s = linkStyleMap[d.source.data.id + '->' + d.target.data.id] || 'solid';
-            return 'url(#arr' + (s === 'error' ? '-err' : '') + '-' + prefix + '-' + index + ')';
-        })
-        .attr('d', linkHoriz);
+    // Edges: use dagre's routed points by default; fall back to a straight
+    // center-to-center line for any node that has been dragged.
+    const pathGen = d3.line().x(p => p.x).y(p => p.y).curve(d3.curveBasis);
+    function edgeD(ed) {
+        if (ed._dragged || !ed.points || ed.points.length < 2) {
+            return pathGen([centerOf(ed.source), centerOf(ed.target)]);
+        }
+        return pathGen(ed.points);
+    }
+    function edgeMarker(ed) {
+        return 'url(#arr' + (ed.style === 'error' ? '-err' : '') + '-' + prefix + '-' + index + ')';
+    }
+
+    const linkSel = g.append('g').selectAll('path')
+        .data(edgeData).join('path')
+        .attr('class', d => 'link ' + (d.style || 'solid'))
+        .attr('marker-end', edgeMarker)
+        .attr('d', edgeD);
 
     // DTMF / action link labels
-    g.append('g').selectAll('text')
-        .data(root.links())
-        .join('text').attr('class', 'link-label')
-        .attr('x', d => (d.source.y + d.target.y) / 2)
-        .attr('y', d => (d.source.x + d.target.x) / 2 - 6)
-        .text(d => linkLabelMap[d.source.data.id + '->' + d.target.data.id] || '');
+    const linkLabelSel = g.append('g').selectAll('text')
+        .data(edgeData).join('text').attr('class', 'link-label')
+        .attr('x', d => (centerOf(d.source).x + centerOf(d.target).x) / 2)
+        .attr('y', d => (centerOf(d.source).y + centerOf(d.target).y) / 2 - 6)
+        .text(d => d.label || '');
 
     // Flow section labels on root→child edges
-    g.append('g').selectAll('text')
-        .data(root.links().filter(d => d.source.data.id === rootId && d.target.data.subLabel))
-        .join('text').attr('class', 'flow-label')
-        .attr('x', d => d.source.y + 22)
-        .attr('y', d => (d.source.x + d.target.x) / 2 - 6)
+    const flowEdges = edgeData.filter(d => d.source === rootId && nodeById[d.target] && nodeById[d.target].subLabel);
+    const flowLabelSel = g.append('g').selectAll('text')
+        .data(flowEdges).join('text').attr('class', 'flow-label')
+        .attr('x', d => centerOf(d.source).x + 22)
+        .attr('y', d => (centerOf(d.source).y + centerOf(d.target).y) / 2 - 6)
         .text(d => {
-            const sub = (d.target.data.subLabel || '').split('\n')[0];
+            const sub = (nodeById[d.target].subLabel || '').split('\n')[0];
             return sub.length > 30 ? sub.substring(0, 28) + '...' : sub;
         });
 
+    function refreshEdges(id) {
+        linkSel.filter(e => e.source === id || e.target === id)
+            .each(e => { e._dragged = true; })
+            .attr('d', edgeD);
+        linkLabelSel.filter(e => e.source === id || e.target === id)
+            .attr('x', e => (centerOf(e.source).x + centerOf(e.target).x) / 2)
+            .attr('y', e => (centerOf(e.source).y + centerOf(e.target).y) / 2 - 6);
+        flowLabelSel.filter(e => e.source === id || e.target === id)
+            .attr('x', e => centerOf(e.source).x + 22)
+            .attr('y', e => (centerOf(e.source).y + centerOf(e.target).y) / 2 - 6);
+    }
+
+    // Drag to reposition. A press that doesn't move past a small threshold is
+    // treated as a *click* (handled in 'end'), so cross-flow jumps still fire —
+    // d3.drag otherwise swallows the trailing click as soon as the pointer
+    // nudges even a pixel.
+    const DRAG_THRESHOLD = 4;
+    const drag = d3.drag()
+        .on('start', function(event, d) {
+            if (event.sourceEvent) event.sourceEvent.stopPropagation(); // don't pan the canvas
+            d._sx = event.x; d._sy = event.y; d._moved = false;
+            d3.select(this).raise();
+        })
+        .on('drag', function(event, d) {
+            if (!d._moved && Math.hypot(event.x - d._sx, event.y - d._sy) <= DRAG_THRESHOLD) return;
+            d._moved = true;
+            d.x = event.x; d.y = event.y;
+            d3.select(this).attr('transform', 'translate(' + d.x + ',' + d.y + ')');
+            refreshEdges(d.data.id);
+        })
+        .on('end', function(event, d) {
+            if (d._moved) return;                  // a real drag — not a click
+            const dest = resolveJump(d.data);      // a click on a jump node — follow it
+            if (dest) jumpTo(dest);
+        });
+
     const node = g.append('g').selectAll('g')
-        .data(root.descendants())
-        .join('g')
+        .data(nodeData).join('g')
         .attr('class', d => 'node node-type-' + (d.data.type || 'default'))
-        .attr('transform', d => 'translate(' + d.y + ',' + d.x + ')')
+        .attr('transform', d => 'translate(' + d.x + ',' + d.y + ')')
         .on('mouseenter', showTooltip)
         .on('mousemove', showTooltip)
-        .on('mouseleave', hideTooltip);
+        .on('mouseleave', hideTooltip)
+        .call(drag);
 
-    node.append('circle')
-        .attr('r', d => {
-            switch (d.data.type) {
-                case 'autoattendant': case 'callqueue': return 18;
-                case 'greeting': case 'menu': case 'agentgroup': return 14;
-                case 'conference_mode': case 'agent_alert': case 'presence_routing': return 6;
-                default: return 12;
-            }
-        });
+    node.append('circle').attr('r', d => d.r);
 
     node.append('text')
         .attr('dy', '0.32em')
-        .attr('x', d => {
-            const r = (d.data.type === 'autoattendant' || d.data.type === 'callqueue') ? 22 : 16;
-            return d.children ? -r : r;
-        })
-        .attr('text-anchor', d => d.children ? 'end' : 'start')
+        .attr('x', d => d.r + 5)
+        .attr('text-anchor', 'start')
         .text(d => {
             const lbl = d.data.label || '';
             return lbl.length > 28 ? lbl.substring(0, 26) + '...' : lbl;
         });
+
+    // Cross-flow jump styling. The click itself is handled in the drag 'end'
+    // handler above (a no-move press), so it survives having drag attached.
+    node.filter(d => resolveJump(d.data)).classed('has-jump', true);
+
+    diagramRegistry.push({ card: card, nodeSel: node });
 }
 
 // ── Render all ──
@@ -496,6 +720,46 @@ nav.on('click', 'a', function(event) {
     event.preventDefault();
     const target = document.querySelector(this.getAttribute('href'));
     if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+// ── Global node search ──
+const searchInput = document.getElementById('search');
+const searchCount = document.getElementById('search-count');
+
+function nodeMatches(nd, q) {
+    const hay = [nd.label, nd.subLabel, nd.type]
+        .concat(Array.isArray(nd.detail) ? nd.detail : [])
+        .join(' ').toLowerCase();
+    return hay.indexOf(q) !== -1;
+}
+
+function runSearch() {
+    const q = (searchInput.value || '').trim().toLowerCase();
+    let total = 0, firstCard = null;
+    diagramRegistry.forEach(reg => {
+        reg.nodeSel.classed('search-match', false).classed('search-dim', false);
+        if (!q) { reg.card.classed('search-hidden', false); return; }
+        let cardMatches = 0;
+        reg.nodeSel.each(function(d) {
+            const m = nodeMatches(d.data, q);
+            d3.select(this).classed('search-match', m).classed('search-dim', !m);
+            if (m) cardMatches++;
+        });
+        total += cardMatches;
+        reg.card.classed('search-hidden', cardMatches === 0);
+        if (cardMatches > 0) {
+            reg.card.classed('collapsed', false);
+            if (!firstCard) firstCard = reg.card.node();
+        }
+    });
+    searchCount.textContent = q ? (total + ' match' + (total === 1 ? '' : 'es')) : '';
+    if (q && firstCard) firstCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+let searchTimer = null;
+searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runSearch, 180);
 });
 </script>
 </body>

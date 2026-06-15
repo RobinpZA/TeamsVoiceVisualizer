@@ -21,14 +21,17 @@ function New-AAGraphData {
         $counter = @{ n = 0 }
 
         function New-Node {
-        param([string]$Label, [string]$Type, [string]$SubLabel)
+        param([string]$Label, [string]$Type, [string]$SubLabel, $Detail, [string]$TargetRef, [string]$LinkKind)
         $id = "aa_$($AA.id)_$($counter.n)"
         $counter.n++
         $node = [PSCustomObject]@{
-            id       = $id
-            label    = $Label
-            type     = $Type
-            subLabel = $SubLabel
+            id        = $id
+            label     = $Label
+            type      = $Type
+            subLabel  = $SubLabel
+            detail    = $Detail
+            targetRef = $TargetRef
+            linkKind  = $LinkKind
         }
         $nodes.Add($node)
         return $id
@@ -53,16 +56,21 @@ function New-AAGraphData {
         $prevNodeId = $ParentId
 
         # Greeting node
+        $greetingDetail = $null
         $greetingLabel = switch ($Flow.greetingType) {
             'TextToSpeech' {
                 $text = if ($Flow.greetingText.Length -gt 60) { $Flow.greetingText.Substring(0, 57) + '...' } else { $Flow.greetingText }
+                if ($Flow.greetingText) { $greetingDetail = @($Flow.greetingText) }
                 "Greeting (TTS): $text"
             }
-            'AudioFile'   { 'Greeting (Audio File)' }
+            'AudioFile'   {
+                if ($Flow.greetingAudio) { $greetingDetail = @("Audio file: $($Flow.greetingAudio)") }
+                'Greeting (Audio File)'
+            }
             'Silence'     { 'Greeting (Silence)' }
             default       { 'No Greeting' }
         }
-        $greetingNode = New-Node -Label $greetingLabel -Type 'greeting' -SubLabel $FlowLabel
+        $greetingNode = New-Node -Label $greetingLabel -Type 'greeting' -SubLabel $FlowLabel -Detail $greetingDetail
         New-Link -Source $prevNodeId -Target $greetingNode -Label '' -Style 'dashed'
 
         $prevNodeId = $greetingNode
@@ -75,7 +83,20 @@ function New-AAGraphData {
             } else {
                 'Menu Options'
             }
-            $menuNode = New-Node -Label $menuPrompt -Type 'menu' -SubLabel $FlowLabel
+            $menuDetail = @($Flow.menuOptions | ForEach-Object {
+                $opt = $_
+                $key = if ($opt.dtmfResponse) { "DTMF $($opt.dtmfResponse)" }
+                       elseif ($opt.voiceResponses) { 'Say "' + ($opt.voiceResponses -join '/') + '"' }
+                       else { 'Default' }
+                $dest = switch ($opt.action) {
+                    'TransferCallToOperator' { 'Operator' }
+                    'TransferCallToTarget'   { if ($opt.targetName) { $opt.targetName } else { $opt.targetId } }
+                    'Announcement'           { 'Announcement' }
+                    default                  { if ($opt.action -in @('Disconnect', 'DisconnectCall')) { 'Disconnect' } else { $opt.action } }
+                }
+                "$key -> $dest"
+            })
+            $menuNode = New-Node -Label $menuPrompt -Type 'menu' -SubLabel $FlowLabel -Detail $menuDetail
             New-Link -Source $prevNodeId -Target $menuNode -Label '' -Style 'solid'
 
             $prevNodeId = $menuNode
@@ -91,7 +112,8 @@ function New-AAGraphData {
                     }
                     'TransferCallToOperator' {
                         $label = if ($AA.operatorName) { "Operator: $($AA.operatorName)" } else { 'Operator' }
-                        $n = New-Node -Label $label -Type 'operator' -SubLabel $FlowLabel
+                        $opDetail = if ($AA.operatorType) { @("Target type: $($AA.operatorType)") } else { $null }
+                        $n = New-Node -Label $label -Type 'operator' -SubLabel $FlowLabel -Detail $opDetail
                         New-Link -Source $prevNodeId -Target $n -Label $dtmfLabel -Style 'solid'
                         $n
                     }
@@ -104,7 +126,12 @@ function New-AAGraphData {
                             'OrganizationalAutoAttendant' { 'autoattendant' }
                             default                  { 'unknown' }
                         }
-                        $n = New-Node -Label $targetLabel -Type $targetType -SubLabel $FlowLabel
+                        $linkKind = switch ($opt.targetType) {
+                            'ApplicationEndpoint'         { 'ra' }
+                            'OrganizationalAutoAttendant' { 'aa' }
+                            default                       { $null }
+                        }
+                        $n = New-Node -Label $targetLabel -Type $targetType -SubLabel $FlowLabel -TargetRef $opt.targetId -LinkKind $linkKind
                         New-Link -Source $prevNodeId -Target $n -Label $dtmfLabel -Style 'solid'
                         $n
                     }
@@ -128,7 +155,15 @@ function New-AAGraphData {
     }
 
     # ── Root node for this AA ──
-    $rootNode = New-Node -Label $AA.name -Type 'autoattendant' -SubLabel 'Auto Attendant'
+    $rootDetail = [System.Collections.Generic.List[string]]::new()
+    if ($AA.language) { $rootDetail.Add("Language: $($AA.language)") }
+    if ($AA.timeZone) { $rootDetail.Add("Time zone: $($AA.timeZone)") }
+    if ($AA.dialByNameEnabled) { $rootDetail.Add("Dial-by-Name: $(if ($AA.directorySearchMethod) { $AA.directorySearchMethod } else { 'enabled' })") }
+    if ($AA.voiceResponseEnabled) { $rootDetail.Add('Voice response enabled') }
+    if ($AA.operatorName) { $rootDetail.Add("Operator: $($AA.operatorName)") }
+    if ($AA.inclusionScopeGroupIds.Count -gt 0) { $rootDetail.Add("Inclusion scope: $($AA.inclusionScopeGroupIds.Count) group(s)") }
+    if ($AA.exclusionScopeGroupIds.Count -gt 0) { $rootDetail.Add("Exclusion scope: $($AA.exclusionScopeGroupIds.Count) group(s)") }
+    $rootNode = New-Node -Label $AA.name -Type 'autoattendant' -SubLabel 'Auto Attendant' -Detail ($rootDetail.ToArray())
 
     # Default call flow
     Build-FlowGraph -Flow $AA.defaultCallFlow -ParentId $rootNode -FlowLabel 'Business Hours'

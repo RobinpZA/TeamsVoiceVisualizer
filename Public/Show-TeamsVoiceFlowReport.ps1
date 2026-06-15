@@ -31,16 +31,28 @@ function Show-TeamsVoiceFlowReport {
         return
     }
 
-    # Build graph data
+    # Build graph data. Each object is built in its own try/catch so that one
+    # malformed Auto Attendant or Call Queue cannot terminate the whole batch
+    # (a terminating error inside ForEach-Object would stop the pipeline).
     Write-Host 'Building Auto Attendant diagrams...' -ForegroundColor Cyan
     $aaGraphs = @($flowData.AutoAttendants | Where-Object { $_ -ne $null } | ForEach-Object {
-        New-AAGraphData -AA $_
+        $aaItem = $_
+        try {
+            New-AAGraphData -AA $aaItem -ErrorAction Stop
+        } catch {
+            Write-Warning "Skipped Auto Attendant '$($aaItem.name)': $($_.Exception.Message)"
+        }
     })
     Write-Host "  Built $($aaGraphs.Count) AA diagram(s)." -ForegroundColor Green
 
     Write-Host 'Building Call Queue diagrams...' -ForegroundColor Cyan
-    $cqGraphs = @($flowData.CallQueues | ForEach-Object {
-        New-CQGraphData -CQ $_
+    $cqGraphs = @($flowData.CallQueues | Where-Object { $_ -ne $null } | ForEach-Object {
+        $cqItem = $_
+        try {
+            New-CQGraphData -CQ $cqItem -ErrorAction Stop
+        } catch {
+            Write-Warning "Skipped Call Queue '$($cqItem.name)': $($_.Exception.Message)"
+        }
     })
     Write-Host "  Built $($cqGraphs.Count) CQ diagram(s)." -ForegroundColor Green
 
