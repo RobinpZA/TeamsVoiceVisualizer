@@ -3,7 +3,7 @@
     ModuleVersion     = '0.1.0'
     GUID              = '6fa1747f-1dd4-42fe-8275-eea3f0177915'
     Author            = 'Robin Pieterse'
-    CompanyName       = 'Turrito Networks'
+    CompanyName       = 'Robin Pieterse'
     Copyright         = '(c) 2026 Robin Pieterse. All rights reserved.'
     Description       = 'PowerShell module that generates interactive D3.js/SVG visualizations of Microsoft Teams Voice Auto Attendant and Call Queue call flows.'
 
