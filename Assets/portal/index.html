@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice map</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <header class="bar" role="banner">
+    <div class="bar-left">
+      <h1 class="brand">Voice map</h1>
+      <span class="bar-meta" id="tenantMeta"></span>
+    </div>
+    <div class="bar-center">
+      <button type="button" class="search-trigger" id="searchBtn" aria-label="Search numbers, people, flows" aria-keyshortcuts="Control+K">
+        <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+        <span class="st-text">Search numbers, people, flows</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+    </div>
+    <div class="bar-right">
+      <button type="button" class="btn desk-only" id="findingsBtn" aria-expanded="false" aria-controls="findingsDrawer">
+        <span>Findings</span>
+        <span class="chips" id="findingsCounts"></span>
+      </button>
+      <button type="button" class="btn btn-primary" id="traceBtn" aria-keyshortcuts="T">Trace a call</button>
+      <div class="menu-wrap desk-only">
+        <button type="button" class="btn" id="exportBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu">
+          <span>Export</span>
+          <svg class="ico ico-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </button>
+        <div class="menu menu-right" id="exportMenu" role="menu" hidden></div>
+      </div>
+      <div class="menu-wrap mob-only">
+        <button type="button" class="btn btn-icon" id="moreBtn" aria-label="Menu" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>
+        </button>
+        <div class="menu menu-right" id="moreMenu" role="menu" hidden></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <svg id="map" class="map" role="application" aria-label="Voice routing map" tabindex="-1">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path class="arrow-path" d="M0 1 10 5 0 9z"/></marker>
+        <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path class="arrow-path arrow-accent" d="M0 1 10 5 0 9z"/></marker>
+      </defs>
+      <rect class="bg" x="-100000" y="-100000" width="200000" height="200000"/>
+      <g class="viewport" id="viewport">
+        <g class="layer-groups"></g>
+        <g class="layer-edges"></g>
+        <g class="layer-nodes"></g>
+      </g>
+    </svg>
+
+    <div class="overlay" id="loading" role="status" aria-live="polite" hidden>
+      <div class="loading-box"><span class="pulse" aria-hidden="true"></span><span id="loadingText">Laying out…</span></div>
+    </div>
+
+    <div class="overlay overlay-solid" id="stateBox" hidden>
+      <div class="state-box">
+        <h2 id="stateTitle"></h2>
+        <p id="stateMsg"></p>
+        <div class="state-actions" id="stateActions"></div>
+        <div class="state-list" id="stateList" hidden></div>
+      </div>
+    </div>
+
+    <div class="legend" id="legend">
+      <button type="button" class="legend-toggle" id="legendBtn" aria-expanded="false" aria-controls="legendBody">Legend</button>
+      <div class="legend-body" id="legendBody" hidden></div>
+    </div>
+
+    <div class="canvas-ctl">
+      <div class="zoom-stack" role="group" aria-label="Map controls">
+        <div class="menu-wrap">
+          <button type="button" class="btn btn-icon" id="viewBtn" aria-label="View options" aria-haspopup="menu" aria-expanded="false" aria-controls="viewMenu" title="View options">
+            <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="12.5" cy="8" r="1"/></svg>
+          </button>
+          <div class="menu menu-up" id="viewMenu" role="menu" hidden></div>
+        </div>
+        <button type="button" class="btn btn-icon" id="zoomIn" aria-label="Zoom in" title="Zoom in"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+        <button type="button" class="btn btn-icon" id="zoomOut" aria-label="Zoom out" title="Zoom out"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg></button>
+        <button type="button" class="btn btn-icon" id="zoomFit" aria-label="Fit to screen" title="Fit (F)" aria-keyshortcuts="F"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg></button>
+      </div>
+      <svg class="minimap" id="minimap" viewBox="0 0 180 120" width="180" height="120" role="img" aria-label="Minimap"></svg>
+    </div>
+  </main>
+
+  <aside class="drawer" id="findingsDrawer" data-open="false" aria-label="Findings">
+    <div class="side-head">
+      <h2 class="side-title">Findings</h2>
+      <button type="button" class="btn btn-icon btn-quiet" id="findingsClose" aria-label="Close findings"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
+    </div>
+    <div class="side-body" id="findingsBody"></div>
+  </aside>
+
+  <aside class="panel" id="panel" data-open="false" aria-label="Details">
+    <div class="side-head">
+      <div class="tabs" role="tablist" aria-label="Panel mode">
+        <button type="button" role="tab" class="tab" id="tabDetails" aria-selected="true" aria-controls="panelDetails">Details</button>
+        <button type="button" role="tab" class="tab" id="tabTrace" aria-selected="false" aria-controls="panelTrace" tabindex="-1">Trace</button>
+      </div>
+      <button type="button" class="btn btn-icon btn-quiet" id="panelClose" aria-label="Close panel"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
+    </div>
+    <div class="side-body" id="panelDetails" role="tabpanel" aria-labelledby="tabDetails"></div>
+    <div class="side-body" id="panelTrace" role="tabpanel" aria-labelledby="tabTrace" hidden></div>
+  </aside>
+
+  <div class="modal" id="searchModal" hidden>
+    <div class="scrim" id="searchScrim"></div>
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Search">
+      <div class="palette-field">
+        <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+        <input id="searchInput" type="text" class="palette-input" role="combobox" aria-expanded="true" aria-controls="searchList" aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="Search numbers, people, flows" aria-label="Search">
+      </div>
+      <div class="palette-list" id="searchList" role="listbox" aria-label="Results"></div>
+      <div class="palette-foot"><span><kbd>Up</kbd> <kbd>Down</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+    </div>
+  </div>
+</div>
+
+<script type="application/json" id="voice-model"></script>
+<script src="dev/model.sample.js" data-dev></script>
+<script src="../vendor/d3.v7.9.0.min.js"></script>
+<script src="../vendor/elk.bundled.0.12.0.js"></script>
+<script src="js/model.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/render.js"></script>
+<script src="js/panel.js"></script>
+<script src="js/search.js"></script>
+<script src="js/findings.js"></script>
+<script src="js/export.js"></script>
+<script src="js/trace-engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

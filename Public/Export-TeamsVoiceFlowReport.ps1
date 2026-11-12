@@ -1,8 +1,8 @@
 function Export-TeamsVoiceFlowReport {
     <#
     .SYNOPSIS
-        Generates an interactive D3.js HTML report of all Teams Voice Auto Attendant
-        and Call Queue call flows and saves it to a file.
+        Generates an interactive voice map of all Teams Voice Auto Attendants and Call
+        Queues and saves it to a file.
     .DESCRIPTION
         Same as Show-TeamsVoiceFlowReport but does not open the file automatically.
         Useful for scheduled/automated report generation.
@@ -11,8 +11,7 @@ function Export-TeamsVoiceFlowReport {
     .EXAMPLE
         Export-TeamsVoiceFlowReport -OutputPath 'C:\Reports\voice-flow-report.html'
     .NOTES
-        D3.js is loaded from CDN. An internet connection is required to render the
-        interactive diagrams when the report is viewed.
+        The report is one offline HTML file; it needs no internet connection to open.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -37,37 +36,13 @@ function Export-TeamsVoiceFlowReport {
             return
         }
 
-        # Build graph data. Each object is built in its own try/catch so that one
-        # malformed Auto Attendant or Call Queue cannot terminate the whole batch.
-        Write-Host 'Building Auto Attendant diagrams...' -ForegroundColor Cyan
-        $aaGraphs = @($flowData.AutoAttendants | Where-Object { $_ -ne $null } | ForEach-Object {
-            $aaItem = $_
-            try {
-                New-AAGraphData -AA $aaItem -ErrorAction Stop
-            } catch {
-                Write-Warning "Skipped Auto Attendant '$($aaItem.name)': $($_.Exception.Message)"
-            }
-        })
-        Write-Host "  Built $($aaGraphs.Count) AA diagram(s)." -ForegroundColor Green
-
-        Write-Host 'Building Call Queue diagrams...' -ForegroundColor Cyan
-        $cqGraphs = @($flowData.CallQueues | Where-Object { $_ -ne $null } | ForEach-Object {
-            $cqItem = $_
-            try {
-                New-CQGraphData -CQ $cqItem -ErrorAction Stop
-            } catch {
-                Write-Warning "Skipped Call Queue '$($cqItem.name)': $($_.Exception.Message)"
-            }
-        })
-        Write-Host "  Built $($cqGraphs.Count) CQ diagram(s)." -ForegroundColor Green
+        Write-Host "Building voice model for $tenantName..." -ForegroundColor Cyan
+        $model = New-VoiceFlowModel -FlowData $flowData
+        Write-Host "  $(@($model.entities.Keys).Count) object(s), $(@($model.edges).Count) connection(s), $(@($model.findings).Count) finding(s)." -ForegroundColor Green
 
         # Generate report
         Write-Host "Generating report..." -ForegroundColor Cyan
-        $savedPath = New-VoiceFlowReport `
-            -AutoAttendantGraphs $aaGraphs `
-            -CallQueueGraphs $cqGraphs `
-            -TenantName $tenantName `
-            -OutputPath $OutputPath
+        $savedPath = New-VoiceFlowReport -Model $model -OutputPath $OutputPath
 
         Write-Host "Report saved to: $savedPath" -ForegroundColor Green
         return $savedPath

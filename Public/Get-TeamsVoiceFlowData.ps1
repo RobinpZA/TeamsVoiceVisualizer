@@ -30,7 +30,8 @@ function Get-TeamsVoiceFlowData {
     # shared by both collectors so transfer targets can resolve to cross-flow
     # jumps (Get-CsOnlineApplicationInstanceAssociation only works RA -> config).
     Write-Host 'Mapping resource accounts...' -ForegroundColor Cyan
-    $raMap = Get-VoiceResourceAccountMap
+    $raData = Get-VoiceResourceAccountData
+    $raMap = $raData.Map
     Write-Host "  Mapped resource accounts for $($raMap.Count) voice app(s)." -ForegroundColor Green
 
     # NOTE: wrap results in @() everywhere. PowerShell unwraps single-element
@@ -62,6 +63,7 @@ function Get-TeamsVoiceFlowData {
         TenantDisplayName = (Get-CsTenant).DisplayName
         AutoAttendants    = @($aaData)
         CallQueues        = @($cqData)
-        GeneratedAt       = (Get-Date -Format 'o')
+        ResourceAccounts  = @($raData.Accounts)
+        GeneratedAt      = (Get-Date -Format 'o')
     }
 }

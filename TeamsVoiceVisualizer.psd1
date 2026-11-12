@@ -1,11 +1,11 @@
 @{
     RootModule        = 'TeamsVoiceVisualizer.psm1'
-    ModuleVersion     = '0.1.0'
+    ModuleVersion     = '2.0.0'
     GUID              = '6fa1747f-1dd4-42fe-8275-eea3f0177915'
     Author            = 'Robin Pieterse'
     CompanyName       = 'Robin Pieterse'
-    Copyright         = '(c) 2026 Robin Pieterse. All rights reserved.'
-    Description       = 'PowerShell module that generates interactive D3.js/SVG visualizations of Microsoft Teams Voice Auto Attendant and Call Queue call flows.'
+    Copyright         = '(c) 2026 Robin Pieterse. MIT License.'
+    Description       = 'Maps a Microsoft Teams tenant''s phone system (numbers, resource accounts, auto attendants, call queues) into one interactive, offline HTML voice map with call tracing and findings.'
 
     PowerShellVersion = '7.2'
 
@@ -26,7 +26,8 @@
         PSData = @{
             Tags         = @('Teams', 'Voice', 'AutoAttendant', 'CallQueue', 'Visualization', 'D3', 'FlowDiagram', 'M365')
             ProjectUri   = 'https://github.com/RobinpZA/TeamsVoiceVisualizer'
-            ReleaseNotes = 'Initial release — interactive D3.js call flow diagrams for Auto Attendants and Call Queues.'
+            LicenseUri   = 'https://github.com/RobinpZA/TeamsVoiceVisualizer/blob/main/LICENSE'
+            ReleaseNotes = '2.0.0: one tenant-wide voice map (expand in place, focus, search, deep links), trace-a-call simulator, findings, fully offline single HTML file.'
         }
     }
 }
