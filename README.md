@@ -1,157 +1,81 @@
 # TeamsVoiceVisualizer
 
-> **PowerShell module that generates interactive D3.js flow diagrams of Microsoft Teams Voice Auto Attendants and Call Queues.**
+PowerShell module that maps a Microsoft Teams tenant's phone system into **one interactive voice map**: every number, resource account, auto attendant and call queue on a single canvas, with a call simulator and a list of problems. The output is a single HTML file that works offline.
 
 ---
 
-## Table of Contents
+## What you get
 
-- [Overview](#overview)
-- [Features](#features)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Commands](#commands)
-- [Module Structure](#module-structure)
-- [Diagram Legend](#diagram-legend)
-
----
-
-## Overview
-
-TeamsVoiceVisualizer connects to Microsoft Teams, retrieves all Auto Attendants (AAs) and Call Queues (CQs), resolves every call target to a human-readable name, and generates a **single-page interactive HTML report** with zoomable D3.js directed graphs for each voice flow.
-
-No server, no database, no external runtime — just PowerShell, the MicrosoftTeams module, and an HTML file.
-
----
-
-## Features
-
-| Area | Capabilities |
-|------|-------------|
-| **Auto Attendants** | Full call flow visualization: greeting → menu → DTMF options → targets (User, Resource Account, External PSTN, Operator, Disconnect, Announcement). Business hours, after-hours with schedule, and holiday flows. |
-| **Call Queues** | Complete flow: greeting → music-on-hold → routing method → agent group (individuals, DLs, Teams channel) → overflow/timeout/no-agents exception paths. Conference mode, presence-based routing, OBO caller ID. |
-| **Layout** | Each flow is laid out as a **layered directed graph** (dagre), so a target referenced from two places stays a single node and back-edges (e.g. AA → Queue → same AA) are preserved rather than cut. |
-| **Interactivity** | Zoom & pan with a per-diagram **Reset view** button. **Drag any node** to reposition it; connected edges follow. Hover tooltips show node details (full greeting text, per-DTMF menu map, agent lists, AA settings). Collapsible sections. Sticky navigation with smooth scroll. |
-| **Image export** | Export any diagram as **PNG** (2× raster) or **SVG** (vector) from the per-diagram toolbar — for tickets, runbooks, or documentation. |
-| **Cross-flow linking** | Transfer targets that point to a resource account fronting another AA or Call Queue become **clickable jumps** — click to scroll to and highlight the destination diagram, so you can follow the end-to-end caller journey. |
-| **Global search** | Search box filters and highlights nodes across every diagram (by user, queue, phone number, or greeting text), auto-expanding and jumping to the first match. |
-| **Dark Theme** | GitHub-dark inspired color scheme. Color-coded node types for instant recognition. |
-| **Self-Contained** | Single HTML file with D3.js and dagre loaded from CDN. No build step, no dependencies beyond a browser. |
+| | |
+|---|---|
+| **Tenant map** | Numbers → resource accounts → auto attendants / call queues → users, groups, voicemail, external numbers. A target used in two places is one node, and loops (attendant → queue → back to the attendant) stay visible. |
+| **Expand in place** | Click the chevron on an attendant to open its business-hours, after-hours and holiday flows, with one port per menu key. Open a queue to see greeting, hold music, routing, agents and overflow / timeout / no-agent paths. The layout re-flows around it. |
+| **Focus** | Click any node to highlight everything upstream and downstream of it. The detail panel shows the full greeting text, menu table, schedule grid, agents and exceptions, and where it is reached from. |
+| **Trace a call** | Pick a number and a date and time, then press keys on the keypad. The path animates through holiday / after-hours logic (in the attendant's own time zone) to where the call lands, and stops on loops. |
+| **Findings** | Queues with no agents, numbers that go nowhere, unresolved transfer targets, dead-end flows, attendants or queues no number reaches, unreadable schedules. Click one to jump to it. |
+| **Search and links** | `Ctrl+K` searches names, numbers, UPNs and greeting text, including people hidden inside queues. Every selection and trace is a shareable URL hash. |
+| **Export** | PNG, SVG or the JSON model. |
+| **Offline** | d3, ELK and fonts are embedded. No CDN, no network calls. |
 
 ---
 
 ## Requirements
 
-- **PowerShell 7.2+**
-- **MicrosoftTeams module** >= 6.0.0 (with an active connection to your Teams tenant)
-- Internet connection (D3.js is loaded from CDN when viewing the report)
-
----
-
-## Installation
-
-```powershell
-# Clone the repository
-git clone https://github.com/RobinpZA/TeamsVoiceVisualizer.git
-
-# Import the module
-Import-Module .\TeamsVoiceVisualizer\TeamsVoiceVisualizer.psd1
-```
-
----
+- PowerShell 7.2+
+- MicrosoftTeams module 6.0.0+, connected with a role that can read voice apps (Teams Administrator or Teams Communications Administrator)
 
 ## Usage
 
-### Quick Start
-
 ```powershell
-# Connect to Teams first (or the module will prompt you)
+Import-Module .\TeamsVoiceVisualizer\TeamsVoiceVisualizer.psd1
 Connect-MicrosoftTeams
 
-# Generate and open the interactive report
+# Build the report and open it
 Show-TeamsVoiceFlowReport
-```
 
-### Export to a Specific File
+# Build it to a file only
+Export-TeamsVoiceFlowReport -OutputPath 'C:\Reports\voice-map.html'
 
-```powershell
-Export-TeamsVoiceFlowReport -OutputPath 'C:\Reports\voice-flow.html'
-```
-
-### Get Raw Data for External Tools
-
-```powershell
+# Raw data for other tools
 $data = Get-TeamsVoiceFlowData
-$data.AutoAttendants | ConvertTo-Json -Depth 5 | Out-File 'aa-data.json'
-$data.CallQueues | ConvertTo-Json -Depth 5 | Out-File 'cq-data.json'
 ```
 
----
+Keyboard: `Ctrl+K` or `/` search · `T` trace · `F` fit · `Esc` close · `Enter` select a focused node.
 
 ## Commands
 
 | Command | Description |
-|---------|-------------|
-| `Get-TeamsVoiceFlowData` | Retrieves all AA and CQ data as structured objects. Returns `PSCustomObject` with `AutoAttendants`, `CallQueues`, `TenantDisplayName`, and `GeneratedAt`. |
-| `Show-TeamsVoiceFlowReport` | Fetches data, generates the interactive D3.js HTML report, saves to a temp file, and opens it in the default browser. Use `-OutputPath` to specify a custom location. |
-| `Export-TeamsVoiceFlowReport` | Same as `Show-*` but does not open the browser. Requires `-OutputPath`. Supports `-WhatIf`/`-Confirm`. |
+|---|---|
+| `Get-TeamsVoiceFlowData` | Reads attendants, queues and resource accounts (with phone numbers) and resolves target names. Returns `TenantDisplayName`, `AutoAttendants`, `CallQueues`, `ResourceAccounts`, `GeneratedAt`. |
+| `Show-TeamsVoiceFlowReport` | Builds the voice map, saves it (temp file or `-OutputPath`) and opens it. |
+| `Export-TeamsVoiceFlowReport` | Same, without opening. `-OutputPath` required; supports `-WhatIf`. |
 
----
-
-## Module Structure
+## How it works
 
 ```
-TeamsVoiceVisualizer/
-├── Private/
-│   ├── Helpers/
-│   │   ├── Connect-TeamsVoiceSession.ps1       # Auth + connection
-│   │   └── Resolve-VoiceTargetName.ps1          # GUID/phone → display name resolution
-│   ├── Data/
-│   │   ├── Get-VoiceAutoAttendantData.ps1       # Fetch + enrich AA data
-│   │   └── Get-VoiceCallQueueData.ps1           # Fetch + enrich CQ data
-│   └── Visualization/
-│       ├── New-AAGraphData.ps1                  # AA → D3 nodes/links
-│       ├── New-CQGraphData.ps1                  # CQ → D3 nodes/links
-│       └── New-VoiceFlowReport.ps1              # Assemble full HTML report
-├── Public/
-│   ├── Get-TeamsVoiceFlowData.ps1
-│   ├── Show-TeamsVoiceFlowReport.ps1
-│   └── Export-TeamsVoiceFlowReport.ps1
-├── Tests/
-│   └── TeamsVoiceVisualizer.Tests.ps1
-├── TeamsVoiceVisualizer.psd1                    # Module manifest
-├── TeamsVoiceVisualizer.psm1                    # Module loader
-├── build.ps1                                    # Analyze / Test / Build
-├── PSScriptAnalyzerSettings.psd1
-└── README.md
+Get-TeamsVoiceFlowData  →  New-VoiceFlowModel  →  New-VoiceFlowReport
+   (Teams cmdlets)          (docs/model.md)        (Assets/portal inlined into one HTML)
 ```
 
----
+- **Model** (`Private/Model/New-VoiceFlowModel.ps1`): describes the tenant, not a drawing. Its shape is specified in [`docs/model.md`](docs/model.md). Findings are computed here.
+- **Portal** (`Assets/portal/`): vanilla JS, no build step. d3 renders, ELK lays out. `js/trace-engine.js` is the call simulator with no DOM dependencies.
+- **Packaging** (`Private/Visualization/New-VoiceFlowReport.ps1`): inlines CSS, JS, fonts and the model. The model is embedded with HTML escaping, so tenant text such as a greeting containing `</script>` cannot break the page.
 
-## Diagram Legend
+## Development
 
-| Color | Node Type | Description |
-|-------|-----------|-------------|
-| 🔵 Blue | Auto Attendant | The AA itself and operator targets |
-| 🟢 Green | Call Queue / Agent Group | CQs and agent collections |
-| 🟣 Purple | Menu / Music on Hold | Menu prompts and queue hold music |
-| 🩶 Gray | Greeting / Endpoint | Greeting nodes and flow endpoints |
-| 🔵 Cyan | User / Agent | Individual user targets |
-| 🩷 Pink | Resource Account | Application endpoints and OBO RAs |
-| 🟠 Orange | External PSTN / Exception | Phone numbers and exception flows |
-| 🔴 Red | Disconnect | Call termination |
+```powershell
+.\build.ps1 -Task All     # PSScriptAnalyzer + Pester + manifest check
+.\build.ps1 -Task Demo    # Output/demo.html from Tests/Fixtures/flowdata.json (no tenant needed)
+```
 
----
+```bash
+node --test "Tests/js/**/*.test.cjs"   # trace engine tests
+```
 
-## Contributing
+Open `Assets/portal/index.html` directly in a browser to work on the UI against `dev/model.sample.js`.
 
-1. Run `.\build.ps1 -Task Analyze` to check code quality.
-2. Run `.\build.ps1 -Task Test` to execute Pester tests.
-3. Run `.\build.ps1 -Task All` for the full validation pipeline.
-
----
+Third-party files and licences: [`Assets/vendor/NOTICE.md`](Assets/vendor/NOTICE.md).
 
 ## License
 
-MIT — see [LICENSE](./LICENSE) for details.
+MIT, see [LICENSE](./LICENSE).

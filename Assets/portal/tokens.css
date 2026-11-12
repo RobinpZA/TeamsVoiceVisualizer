@@ -1,0 +1,85 @@
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench (full-viewport canvas + side panels)
+ * theme: custom (tuned) · vibe: "graphite instrument panel, one lit wire"
+ * paper oklch(17% 0.012 255) · accent oklch(80% 0.12 200) cyan
+ * display: Space Grotesk 500/600 · body: IBM Plex Sans 400/500 · outlier: JetBrains Mono (labels, keys, numbers)
+ * axes: dark / grotesk-sans / cool · nav: N4-style command bar (Ctrl+K) · footer: none (tool)
+ * Every colour and font in the portal comes from this file. No literals elsewhere.
+ */
+
+@font-face { font-family: "Space Grotesk"; font-weight: 500; font-style: normal; font-display: swap; src: url("../vendor/fonts/space-grotesk-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-weight: 600; font-style: normal; font-display: swap; src: url("../vendor/fonts/space-grotesk-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400; font-style: normal; font-display: swap; src: url("../vendor/fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 500; font-style: normal; font-display: swap; src: url("../vendor/fonts/ibm-plex-sans-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-style: normal; font-display: swap; src: url("../vendor/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-style: normal; font-display: swap; src: url("../vendor/fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
+
+:root {
+  color-scheme: dark;
+
+  /* colour: graphite tinted toward hue 255, never zero-chroma */
+  --color-paper:      oklch(17% 0.012 255);   /* canvas */
+  --color-paper-2:    oklch(21% 0.013 255);   /* bars, panels, node fill */
+  --color-paper-3:    oklch(25% 0.014 255);   /* hover / pressed / expanded group fill */
+  --color-rule:       oklch(30% 0.014 255);   /* hairlines, edges at rest */
+  --color-rule-ctl:   oklch(48% 0.016 255);   /* control + node borders, >= 3:1 on paper */
+  --color-neutral:    oklch(70% 0.012 255);   /* de-emphasised text, >= 4.5:1 on paper-2 */
+  --color-muted:      oklch(80% 0.010 255);   /* secondary prose */
+  --color-ink:        oklch(94% 0.006 255);   /* primary text */
+  --color-accent:     oklch(80% 0.12 200);    /* the one lit wire: selection, trace path, primary action */
+  --color-accent-ink: oklch(18% 0.03 200);    /* text on an accent fill */
+  --color-accent-wash: oklch(80% 0.12 200 / 0.14); /* selected-node fill, trace step highlight */
+  --color-focus:      oklch(80% 0.12 200);
+  --color-scrim:      oklch(10% 0.01 255 / 0.55);
+
+  /* status: findings only, never decoration */
+  --color-error:      oklch(70% 0.18 25);
+  --color-warning:    oklch(82% 0.14 85);
+  --color-info:       oklch(76% 0.06 255);
+
+  /* type */
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-outlier: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --text-xs:   0.6875rem;  /* 11px mono labels */
+  --text-sm:   0.8125rem;  /* 13px */
+  --text-base: 0.875rem;   /* 14px, tool UI body */
+  --text-md:   1rem;
+  --text-lg:   1.25rem;
+  --text-xl:   1.625rem;
+  --text-display: 2rem;
+  --tracking-label: 0.06em;
+
+  /* 4pt space scale */
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs:  0.5rem;
+  --space-sm:  0.75rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+
+  /* motion */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:     cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-layout: 380ms;   /* node re-position after expand/collapse */
+
+  /* shape + depth */
+  --radius-input: 6px;
+  --radius-node:  8px;
+  --radius-panel: 10px;
+  --radius-pill:  999px;
+  --rule-hair: 1px;
+  --control-h: 2.75rem;
+  --control-h-compact: 2rem;  /* desktop toolbar only; touch layouts use --control-h */
+  --panel-w: 24rem;
+  --bar-h: 3.25rem;
+
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100;
+  --z-sticky: 200; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+}

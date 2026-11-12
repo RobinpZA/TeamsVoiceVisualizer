@@ -28,7 +28,9 @@ function Get-VoiceAutoAttendantData {
     }
 
     try {
-        $aas = Get-CsAutoAttendant -ErrorAction Stop
+        $aas = Invoke-VoicePagedQuery -KeyProperty Identity -Query {
+            param($Skip, $PageSize) Get-CsAutoAttendant -First $PageSize -Skip $Skip -ErrorAction Stop
+        }
     } catch {
         throw "Failed to retrieve Auto Attendants: $($_.Exception.Message)"
     }
@@ -44,6 +46,18 @@ function Get-VoiceAutoAttendantData {
             $operatorType = [string]$aa.Operator.Type
             if ($operatorType) {
                 $operatorName = Resolve-VoiceTargetName -Id $aa.Operator.Identity -Type $operatorType -NameCache $NameCache
+            }
+        }
+
+        $operatorId = if ($aa.Operator -and $aa.Operator.Id) { [string]$aa.Operator.Id } else { $null }
+
+        $timeZoneIana = $null
+        if ($aa.TimeZoneId) {
+            try {
+                $iana = $null
+                if ([System.TimeZoneInfo]::TryConvertWindowsIdToIanaId([string]$aa.TimeZoneId, [ref]$iana)) { $timeZoneIana = $iana }
+            } catch {
+                Write-Verbose "AutoAttendantData: Could not convert time zone '$($aa.TimeZoneId)' to IANA: $_"
             }
         }
 
@@ -80,21 +94,32 @@ function Get-VoiceAutoAttendantData {
             }
         }
 
+        $afterHoursScheduleError = [bool]($ahAssoc -and -not $afterHoursSchedule)
+
         # ── Build holiday flows ──
         $holidayFlows = @($aa.CallHandlingAssociations | Where-Object { [string]$_.Type -eq 'Holiday' -and $_.Enabled } | ForEach-Object {
             $hAssoc = $_
             $hCf = $aa.CallFlows | Where-Object { $_.Id -eq $hAssoc.CallFlowId } | Select-Object -First 1
             $hf = if ($hCf) { Build-AutoAttendantCallFlow -Flow $hCf -NameCache $NameCache } else { $null }
             $scheduleName = $null
+            $dateRanges = @()
             try {
                 $hs = Get-CsOnlineSchedule -Id $hAssoc.ScheduleId -ErrorAction SilentlyContinue
-                if ($hs) { $scheduleName = $hs.Name }
+                if ($hs) {
+                    $scheduleName = $hs.Name
+                    if ($hs.FixedSchedule -and $hs.FixedSchedule.DateTimeRanges) {
+                        $dateRanges = @($hs.FixedSchedule.DateTimeRanges | ForEach-Object {
+                            @{ start = ([datetime]$_.Start).ToString('s'); end = ([datetime]$_.End).ToString('s') }
+                        })
+                    }
+                }
             } catch {
                 Write-Verbose "AutoAttendantData: Could not resolve holiday schedule: $_"
             }
             @{
                 scheduleId   = $hAssoc.ScheduleId
                 scheduleName = $scheduleName
+                dateRanges   = $dateRanges
                 callFlow     = $hf
             }
         })
@@ -109,12 +134,15 @@ function Get-VoiceAutoAttendantData {
             name                       = [string]$aa.Name
             language                   = [string]$aa.LanguageId
             timeZone                   = [string]$aa.TimeZoneId
+            timeZoneIana               = $timeZoneIana
             voiceResponseEnabled       = [bool]$aa.EnableVoiceResponse
             operatorName               = $operatorName
             operatorType               = $operatorType
+            operatorId                 = $operatorId
             defaultCallFlow            = $defaultFlow
             afterHoursCallFlow         = $afterHoursFlow
             afterHoursSchedule         = $afterHoursSchedule
+            afterHoursScheduleError    = $afterHoursScheduleError
             holidayFlows               = $holidayFlows
             dialByNameEnabled          = [bool]$aa.EnableDialByName
             directorySearchMethod      = [string]$aa.DirectorySearchMethod
@@ -162,11 +190,15 @@ function Build-AutoAttendantCallFlow {
         }
     }
 
+    $greetings = @($Flow.Greetings | Where-Object { $_ } | ForEach-Object { ConvertTo-AutoAttendantPromptData -Prompt $_ })
+
     # Menu
+    $menuPrompts = @()
     $menuPromptText = $null
     $menuOptions = @()
     $menu = $Flow.Menu
     if ($menu) {
+        $menuPrompts = @($menu.Prompts | Where-Object { $_ } | ForEach-Object { ConvertTo-AutoAttendantPromptData -Prompt $_ })
         $menuPrompt = $menu.Prompts | Select-Object -First 1
         if ($menuPrompt) { $menuPromptText = $menuPrompt.TextToSpeechPrompt }
 
@@ -184,6 +216,7 @@ function Build-AutoAttendantCallFlow {
                 targetType     = $tType
                 targetId       = $tId
                 targetName     = $tName
+                prompt         = if ($_.Prompt) { ConvertTo-AutoAttendantPromptData -Prompt $_.Prompt } else { $null }
             }
         })
     }
@@ -193,7 +226,32 @@ function Build-AutoAttendantCallFlow {
         greetingType   = $greetingType
         greetingText   = $greetingText
         greetingAudio  = $greetingAudioFile
+        greetings      = $greetings
+        menuPrompts    = $menuPrompts
         menuPromptText = $menuPromptText
         menuOptions    = $menuOptions
     }
+}
+
+function ConvertTo-AutoAttendantPromptData {
+    <#
+    .SYNOPSIS
+        Normalises a Teams AA prompt into @{ type = tts|audio|silence; text; audioFile }.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        $Prompt
+    )
+
+    $type = 'silence'
+    $text = $null
+    $audioFile = $null
+    if ($null -ne $Prompt.TextToSpeechPrompt -and $Prompt.TextToSpeechPrompt -ne '') {
+        $type = 'tts'
+        $text = [string]$Prompt.TextToSpeechPrompt
+    } elseif ($null -ne $Prompt.AudioFilePrompt) {
+        $type = 'audio'
+        $audioFile = if ($Prompt.AudioFilePrompt.FileName) { [string]$Prompt.AudioFilePrompt.FileName } else { [string]$Prompt.AudioFilePrompt }
+    }
+    return @{ type = $type; text = $text; audioFile = $audioFile }
 }

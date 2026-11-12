@@ -28,7 +28,9 @@ function Get-VoiceCallQueueData {
     }
 
     try {
-        $cqs = Get-CsCallQueue -ErrorAction Stop
+        $cqs = Invoke-VoicePagedQuery -KeyProperty Identity -Query {
+            param($Skip, $PageSize) Get-CsCallQueue -First $PageSize -Skip $Skip -ErrorAction Stop
+        }
     } catch {
         throw "Failed to retrieve Call Queues: $($_.Exception.Message)"
     }
@@ -40,8 +42,10 @@ function Get-VoiceCallQueueData {
         # Resolve target names
         $resolveTarget = {
             param($TargetObj)
+            # Single return path: a bare pipeline value plus 'return $null' would
+            # emit two objects and turn the name into @(name, $null).
             if ($TargetObj -and $TargetObj.Id -and [string]$TargetObj.Type) {
-                Resolve-VoiceTargetName -Id $TargetObj.Id -Type ([string]$TargetObj.Type) -NameCache $NameCache
+                return Resolve-VoiceTargetName -Id $TargetObj.Id -Type ([string]$TargetObj.Type) -NameCache $NameCache
             }
             return $null
         }

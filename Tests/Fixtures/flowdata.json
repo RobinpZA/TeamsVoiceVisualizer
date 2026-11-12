@@ -1,0 +1,440 @@
+{
+  "TenantDisplayName": "Contoso Demo",
+  "AutoAttendants": [
+    {
+      "id": "A1A1A1A1-0001-4000-8000-000000000001",
+      "operatorType": "User",
+      "voiceResponseEnabled": true,
+      "afterHoursCallFlow": {
+        "greetings": [
+          {
+            "type": "tts",
+            "audioFile": null,
+            "text": "Our offices are closed. Please leave a message."
+          }
+        ],
+        "greetingAudio": null,
+        "greetingText": "Our offices are closed. Please leave a message.",
+        "menuPromptText": null,
+        "menuOptions": [
+          {
+            "dtmfResponse": "Automatic",
+            "targetType": "SharedVoicemail",
+            "targetName": "Reception Voicemail",
+            "action": "TransferCallToTarget",
+            "prompt": null,
+            "targetId": "d0000000-0002-4000-8000-000000000002",
+            "voiceResponses": []
+          }
+        ],
+        "menuPrompts": [],
+        "name": "After hours",
+        "greetingType": "TextToSpeech"
+      },
+      "inclusionScopeGroupIds": [],
+      "afterHoursScheduleError": false,
+      "directorySearchMethod": "ByName",
+      "timeZoneIana": "Africa/Johannesburg",
+      "language": "en-ZA",
+      "holidayFlows": [
+        {
+          "callFlow": {
+            "greetings": [
+              {
+                "type": "tts",
+                "audioFile": null,
+                "text": "Merry Christmas. We are closed today."
+              }
+            ],
+            "greetingAudio": null,
+            "greetingText": "Merry Christmas. We are closed today.",
+            "menuPromptText": null,
+            "menuOptions": [
+              {
+                "dtmfResponse": "Automatic",
+                "targetType": null,
+                "targetName": null,
+                "action": "DisconnectCall",
+                "prompt": null,
+                "targetId": null,
+                "voiceResponses": []
+              }
+            ],
+            "menuPrompts": [],
+            "name": "Christmas",
+            "greetingType": "TextToSpeech"
+          },
+          "scheduleId": "f0000000-0001-4000-8000-000000000001",
+          "dateRanges": [
+            {
+              "start": "2026-12-25T00:00:00",
+              "end": "2026-12-26T00:00:00"
+            }
+          ],
+          "scheduleName": "Christmas"
+        }
+      ],
+      "dialByNameEnabled": true,
+      "defaultCallFlow": {
+        "greetings": [
+          {
+            "type": "tts",
+            "audioFile": null,
+            "text": "Welcome to Contoso </script><script>alert(2)</script> - how can we help?"
+          }
+        ],
+        "greetingAudio": null,
+        "greetingText": "Welcome to Contoso </script><script>alert(2)</script> - how can we help?",
+        "menuPromptText": "Press 1 for Sales, 2 for Support, 3 for Accounts, 9 for the after-hours line.",
+        "menuOptions": [
+          {
+            "dtmfResponse": "Tone1",
+            "targetType": "ApplicationEndpoint",
+            "targetName": "Sales Queue RA",
+            "action": "TransferCallToTarget",
+            "prompt": null,
+            "targetId": "aaaaaaaa-0002-4000-8000-000000000002",
+            "voiceResponses": [
+              "sales"
+            ]
+          },
+          {
+            "dtmfResponse": "Tone2",
+            "targetType": "ApplicationEndpoint",
+            "targetName": "Support Queue RA",
+            "action": "TransferCallToTarget",
+            "prompt": null,
+            "targetId": "aaaaaaaa-0003-4000-8000-000000000003",
+            "voiceResponses": [
+              "support"
+            ]
+          },
+          {
+            "dtmfResponse": "Tone3",
+            "targetType": "OrganizationalAutoAttendant",
+            "targetName": "Accounts",
+            "action": "TransferCallToTarget",
+            "prompt": null,
+            "targetId": "a1a1a1a1-0002-4000-8000-000000000002",
+            "voiceResponses": [
+              "accounts"
+            ]
+          },
+          {
+            "dtmfResponse": "Tone5",
+            "targetType": "User",
+            "targetName": "b0000000-00ff-4000-8000-0000000000ff",
+            "action": "TransferCallToTarget",
+            "prompt": null,
+            "targetId": "b0000000-00ff-4000-8000-0000000000ff",
+            "voiceResponses": []
+          },
+          {
+            "dtmfResponse": "Tone7",
+            "targetType": null,
+            "targetName": null,
+            "action": "Announcement",
+            "prompt": {
+              "type": "tts",
+              "audioFile": null,
+              "text": "Our offices are at 1 Main Road, Johannesburg."
+            },
+            "targetId": null,
+            "voiceResponses": []
+          },
+          {
+            "dtmfResponse": "Tone9",
+            "targetType": "ExternalPstn",
+            "targetName": "+27215550199",
+            "action": "TransferCallToTarget",
+            "prompt": null,
+            "targetId": "tel:+27215550199",
+            "voiceResponses": []
+          },
+          {
+            "dtmfResponse": "Tone0",
+            "targetType": null,
+            "targetName": null,
+            "action": "TransferCallToOperator",
+            "prompt": null,
+            "targetId": null,
+            "voiceResponses": [
+              "operator"
+            ]
+          },
+          {
+            "dtmfResponse": "ToneStar",
+            "targetType": null,
+            "targetName": null,
+            "action": "DisconnectCall",
+            "prompt": null,
+            "targetId": null,
+            "voiceResponses": []
+          }
+        ],
+        "menuPrompts": [
+          {
+            "type": "tts",
+            "audioFile": null,
+            "text": "Press 1 for Sales, 2 for Support, 3 for Accounts, 9 for the after-hours line."
+          }
+        ],
+        "name": "Default",
+        "greetingType": "TextToSpeech"
+      },
+      "timeZone": "South Africa Standard Time",
+      "name": "Main Reception",
+      "afterHoursSchedule": {
+        "wednesday": [
+          {
+            "start": "08:00:00",
+            "end": "17:00:00"
+          }
+        ],
+        "saturday": [],
+        "tuesday": [
+          {
+            "start": "08:00:00",
+            "end": "17:00:00"
+          }
+        ],
+        "monday": [
+          {
+            "start": "08:00:00",
+            "end": "17:00:00"
+          }
+        ],
+        "sunday": [],
+        "thursday": [
+          {
+            "start": "08:00:00",
+            "end": "17:00:00"
+          }
+        ],
+        "friday": [
+          {
+            "start": "08:00:00",
+            "end": "17:00:00"
+          }
+        ]
+      },
+      "operatorName": "Olivia Operator",
+      "exclusionScopeGroupIds": [],
+      "associatedResourceAccounts": [
+        "AAAAAAAA-0001-4000-8000-000000000001"
+      ],
+      "operatorId": "b0000000-0001-4000-8000-000000000001"
+    },
+    {
+      "id": "a1a1a1a1-0002-4000-8000-000000000002",
+      "operatorType": null,
+      "voiceResponseEnabled": false,
+      "afterHoursCallFlow": null,
+      "inclusionScopeGroupIds": [],
+      "afterHoursScheduleError": false,
+      "directorySearchMethod": "None",
+      "timeZoneIana": "Africa/Johannesburg",
+      "language": "en-ZA",
+      "holidayFlows": [],
+      "dialByNameEnabled": false,
+      "defaultCallFlow": {
+        "greetings": [
+          {
+            "type": "silence",
+            "audioFile": null,
+            "text": null
+          }
+        ],
+        "greetingAudio": null,
+        "greetingText": null,
+        "menuPromptText": null,
+        "menuOptions": [],
+        "menuPrompts": [],
+        "name": "Default",
+        "greetingType": "Silence"
+      },
+      "timeZone": "South Africa Standard Time",
+      "name": "Accounts",
+      "afterHoursSchedule": null,
+      "operatorName": null,
+      "exclusionScopeGroupIds": [],
+      "associatedResourceAccounts": [],
+      "operatorId": null
+    }
+  ],
+  "CallQueues": [
+    {
+      "agentAlertTimeSeconds": 30,
+      "musicOnHoldAudioFileId": null,
+      "channelId": null,
+      "overflowActionTargetId": "AAAAAAAA-0001-4000-8000-000000000001",
+      "overflowActionTargetName": "Main Reception RA",
+      "overflowAction": "Forward",
+      "welcomeMusicAudioFileId": null,
+      "name": "Sales",
+      "agentNames": [
+        "Alice Agent",
+        "<img src=x onerror=alert(1)>",
+        "Carl Closer"
+      ],
+      "overflowActionTargetType": "ApplicationEndpoint",
+      "welcomeTtsPrompt": "Thanks for calling Sales.",
+      "distributionListNames": [
+        "Sales Team DL"
+      ],
+      "useDefaultMusicOnHold": true,
+      "timeoutAction": "SharedVoicemail",
+      "noAgentActionTargetType": null,
+      "allowOptOut": true,
+      "conferenceMode": true,
+      "distributionListIds": [
+        "d0000000-0001-4000-8000-000000000001"
+      ],
+      "serviceLevelThresholdSeconds": 30,
+      "oboResourceAccountIds": [
+        "aaaaaaaa-0002-4000-8000-000000000002"
+      ],
+      "id": "C1C1C1C1-0001-4000-8000-000000000001",
+      "overflowThreshold": 20,
+      "timeoutActionTargetType": "SharedVoicemail",
+      "noAgentAction": "Queue",
+      "timeoutActionTargetName": "Sales Voicemail",
+      "presenceBasedRouting": true,
+      "timeoutActionTargetId": "d0000000-0003-4000-8000-000000000003",
+      "channelUserObjectId": null,
+      "timeoutThresholdSeconds": 300,
+      "oboResourceAccountNames": [
+        "Sales Queue RA"
+      ],
+      "noAgentActionTargetName": null,
+      "noAgentActionTargetId": null,
+      "routingMethod": "LongestIdle",
+      "agentIds": [
+        "b0000000-0002-4000-8000-000000000002",
+        "b0000000-0003-4000-8000-000000000003",
+        "b0000000-0004-4000-8000-000000000004"
+      ],
+      "languageId": "en-ZA",
+      "associatedResourceAccounts": [
+        "aaaaaaaa-0002-4000-8000-000000000002"
+      ]
+    },
+    {
+      "agentAlertTimeSeconds": 30,
+      "musicOnHoldAudioFileId": null,
+      "channelId": null,
+      "overflowActionTargetId": null,
+      "overflowActionTargetName": null,
+      "overflowAction": "DisconnectWithBusy",
+      "welcomeMusicAudioFileId": null,
+      "name": "Support",
+      "agentNames": [],
+      "overflowActionTargetType": null,
+      "welcomeTtsPrompt": "",
+      "distributionListNames": [],
+      "useDefaultMusicOnHold": true,
+      "timeoutAction": "Disconnect",
+      "noAgentActionTargetType": "ExternalPstn",
+      "allowOptOut": true,
+      "conferenceMode": true,
+      "distributionListIds": [],
+      "serviceLevelThresholdSeconds": 30,
+      "oboResourceAccountIds": [],
+      "id": "c1c1c1c1-0002-4000-8000-000000000002",
+      "overflowThreshold": 50,
+      "timeoutActionTargetType": null,
+      "noAgentAction": "Forward",
+      "timeoutActionTargetName": null,
+      "presenceBasedRouting": true,
+      "timeoutActionTargetId": null,
+      "channelUserObjectId": null,
+      "timeoutThresholdSeconds": 1200,
+      "oboResourceAccountNames": [],
+      "noAgentActionTargetName": "+27215550199",
+      "noAgentActionTargetId": "tel:+27215550199",
+      "routingMethod": "Attendant",
+      "agentIds": [],
+      "languageId": "en-ZA",
+      "associatedResourceAccounts": [
+        "aaaaaaaa-0003-4000-8000-000000000003"
+      ]
+    },
+    {
+      "agentAlertTimeSeconds": 30,
+      "musicOnHoldAudioFileId": "legacy-hold.wav",
+      "channelId": null,
+      "overflowActionTargetId": null,
+      "overflowActionTargetName": null,
+      "overflowAction": "DisconnectWithBusy",
+      "welcomeMusicAudioFileId": null,
+      "name": "Legacy",
+      "agentNames": [
+        "Lena Legacy"
+      ],
+      "overflowActionTargetType": null,
+      "welcomeTtsPrompt": "",
+      "distributionListNames": [],
+      "useDefaultMusicOnHold": false,
+      "timeoutAction": "Disconnect",
+      "noAgentActionTargetType": null,
+      "allowOptOut": true,
+      "conferenceMode": true,
+      "distributionListIds": [],
+      "serviceLevelThresholdSeconds": 30,
+      "oboResourceAccountIds": [],
+      "id": "c1c1c1c1-0003-4000-8000-000000000003",
+      "overflowThreshold": 50,
+      "timeoutActionTargetType": null,
+      "noAgentAction": "Queue",
+      "timeoutActionTargetName": null,
+      "presenceBasedRouting": true,
+      "timeoutActionTargetId": null,
+      "channelUserObjectId": null,
+      "timeoutThresholdSeconds": 1200,
+      "oboResourceAccountNames": [],
+      "noAgentActionTargetName": null,
+      "noAgentActionTargetId": null,
+      "routingMethod": "Attendant",
+      "agentIds": [
+        "b0000000-0005-4000-8000-000000000005"
+      ],
+      "languageId": "en-ZA",
+      "associatedResourceAccounts": []
+    }
+  ],
+  "ResourceAccounts": [
+    {
+      "phoneNumber": "tel:+27115550100",
+      "upn": "ra-main@contoso-demo.example",
+      "configId": "a1a1a1a1-0001-4000-8000-000000000001",
+      "id": "AAAAAAAA-0001-4000-8000-000000000001",
+      "applicationId": "ce933385-9390-45d1-9512-c8d228074e07",
+      "name": "Main Reception RA"
+    },
+    {
+      "phoneNumber": "tel:+27115550101",
+      "upn": "ra-sales@contoso-demo.example",
+      "configId": "c1c1c1c1-0001-4000-8000-000000000001",
+      "id": "aaaaaaaa-0002-4000-8000-000000000002",
+      "applicationId": "11cd3e2e-fccb-42ad-ad00-878b93575e07",
+      "name": "Sales Queue RA"
+    },
+    {
+      "phoneNumber": "tel:+27115550102",
+      "upn": "ra-support@contoso-demo.example",
+      "configId": "c1c1c1c1-0002-4000-8000-000000000002",
+      "id": "aaaaaaaa-0003-4000-8000-000000000003",
+      "applicationId": "11cd3e2e-fccb-42ad-ad00-878b93575e07",
+      "name": "Support Queue RA"
+    },
+    {
+      "phoneNumber": "tel:+27115550103",
+      "upn": "ra-orphan@contoso-demo.example",
+      "configId": null,
+      "id": "aaaaaaaa-0004-4000-8000-000000000004",
+      "applicationId": "ce933385-9390-45d1-9512-c8d228074e07",
+      "name": "Orphan RA"
+    }
+  ],
+  "GeneratedAt": "2026-11-12T10:00:00+02:00"
+}
